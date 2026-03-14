@@ -47,8 +47,18 @@ Those 62 customers have ₹2,06,085 in combined lifetime spend at risk. Recoveri
 
 Three Azure services feed raw data in. It moves through three layers: Bronze (raw), Silver (cleaned and joined), Gold (aggregated for reporting). Five models run on Silver. Results reach a live dashboard by 08:00 IST every morning.
 
-```
 ![BharatMart Pipeline Architecture](architecture.png)
+
+```
+Azure SQL (master data)  ·  Event Hub (live orders)  ·  ADLS Gen2 (files)
+                                      ↓
+                    BRONZE (raw, as-is)
+                                      ↓
+                    SILVER (cleaned, deduplicated, joined)
+                         ↓                     ↓
+                    5 ML models            Gold tables
+                         ↓                     ↓
+               AIBI Dashboard           Power BI Dashboard
 ```
 
 **Stack:** Azure Databricks Premium · Azure SQL · ADLS Gen2 · Azure Event Hub · Delta Lake · Unity Catalog · MLflow · Mosaic AI
