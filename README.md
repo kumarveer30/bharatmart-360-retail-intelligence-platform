@@ -49,17 +49,7 @@ Three Azure services feed raw data in. It moves through three layers: Bronze (ra
 
 ![BharatMart Pipeline Architecture](architecture.png)
 
-```
-Azure SQL (master data)  ·  Event Hub (live orders)  ·  ADLS Gen2 (files)
-                                      ↓
-                    BRONZE (raw, as-is)
-                                      ↓
-                    SILVER (cleaned, deduplicated, joined)
-                         ↓                     ↓
-                    5 ML models            Gold tables
-                         ↓                     ↓
-               AIBI Dashboard           Power BI Dashboard
-```
+
 
 **Stack:** Azure Databricks Premium · Azure SQL · ADLS Gen2 · Azure Event Hub · Delta Lake · Unity Catalog · MLflow · Mosaic AI
 
