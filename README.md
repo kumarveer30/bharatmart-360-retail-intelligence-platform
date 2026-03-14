@@ -50,7 +50,6 @@ Three Azure services feed raw data in. It moves through three layers: Bronze (ra
 ![BharatMart Pipeline Architecture](architecture.png)
 
 
-
 **Stack:** Azure Databricks Premium · Azure SQL · ADLS Gen2 · Azure Event Hub · Delta Lake · Unity Catalog · MLflow · Mosaic AI
 
 ---
