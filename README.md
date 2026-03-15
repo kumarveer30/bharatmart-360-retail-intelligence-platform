@@ -11,6 +11,13 @@ A Databricks pipeline that scores 92,107 customers every night and produces a ca
 
 ---
 
+## Demo
+
+**Pipeline Walkthrough**
+
+[![Pipeline Demo](https://img.youtube.com/vi/lKUfQcDLOvI/0.jpg)](https://youtu.be/lKUfQcDLOvI?si=Y4WtfOM7CwDS_qDR)
+
+
 ## Background
 
 India's e-commerce market hit $147.3 billion in 2024. Three out of four buyers never return after their first purchase. Annual churn on the major platforms runs above 30%. Acquiring a new customer costs 5 to 25 times more than keeping one.
