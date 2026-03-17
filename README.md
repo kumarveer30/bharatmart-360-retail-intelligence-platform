@@ -19,7 +19,8 @@ A Databricks pipeline that scores 92,107 customers every night and produces a ca
 
 ## 📽️ Presentation
 
-[![BharatMart 360 Presentation](https://img.youtube.com/vi/MbTvdmEjpPE/maxresdefault.jpg)](https://youtu.be/MbTvdmEjpPE?si=MBsJO2r-ufI28Q00)
+[![BharatMart 360 Presentation](https://img.youtube.com/vi/MbTvdmEjpPE/maxresdefault.jpg)](https://youtu.be/MbTvdmEjpPE)
+
 
 
 ## Background
