@@ -1,0 +1,2163 @@
+{
+  "datasets": [
+    {
+      "name": "d9f84e0f",
+      "displayName": "gld_als_recommendations",
+      "queryLines": [
+        "SELECT * FROM bharatmart.ml.gld_als_recommendations"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "d512fdef",
+      "displayName": "gld_churn_predictions",
+      "queryLines": [
+        "SELECT * FROM bharatmart.ml.gld_churn_predictions"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "c2c12ccf",
+      "displayName": "gld_review_insights",
+      "queryLines": [
+        "SELECT * FROM bharatmart.ml.gld_review_insights"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "56525f01",
+      "displayName": "gld_rfm_segments",
+      "queryLines": [
+        "SELECT * FROM bharatmart.ml.gld_rfm_segments"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "80284dac",
+      "displayName": "gld_rfmq_recommendations",
+      "queryLines": [
+        "SELECT * FROM bharatmart.ml.gld_rfmq_recommendations"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "893879e6",
+      "displayName": "ds_funnel_ltv",
+      "queryLines": [
+        "SELECT\r\n",
+        "  stage,\r\n",
+        "  sort_order,\r\n",
+        "  customer_count,\r\n",
+        "  avg_ltv,\r\n",
+        "  CONCAT('₹', format_number(avg_ltv, 0)) AS avg_ltv_label\r\n",
+        "FROM (\r\n",
+        "  SELECT 'Total Customers' AS stage, 1 AS sort_order,\r\n",
+        "    COUNT(DISTINCT customer_id) AS customer_count,\r\n",
+        "    CAST(0 AS DOUBLE) AS avg_ltv\r\n",
+        "  FROM bharatmart.ml.gld_churn_predictions\r\n",
+        "\r\n",
+        "  UNION ALL\r\n",
+        "\r\n",
+        "  SELECT 'Critical Risk', 2,\r\n",
+        "    COUNT(DISTINCT c.customer_id),\r\n",
+        "    ROUND(AVG(s.total_spent), 0)\r\n",
+        "  FROM bharatmart.ml.gld_churn_predictions c\r\n",
+        "  JOIN bharatmart.ml.gld_rfm_segments s ON c.customer_id = s.customer_id\r\n",
+        "  WHERE c.churn_risk_band = 'Critical'\r\n",
+        "\r\n",
+        "  UNION ALL\r\n",
+        "\r\n",
+        "  SELECT 'Urgent Champions', 3,\r\n",
+        "    COUNT(DISTINCT customer_id),\r\n",
+        "    ROUND(AVG(total_spent), 0)\r\n",
+        "  FROM bharatmart.ml.gld_rfm_segments\r\n",
+        "  WHERE retention_priority = 'Urgent'\r\n",
+        "\r\n",
+        "  UNION ALL\r\n",
+        "\r\n",
+        "  SELECT 'Urgent + Negative Review', 4,\r\n",
+        "    COUNT(DISTINCT s.customer_id),\r\n",
+        "    ROUND(AVG(s.total_spent), 0)\r\n",
+        "  FROM bharatmart.ml.gld_rfm_segments s\r\n",
+        "  WHERE s.retention_priority = 'Urgent'\r\n",
+        "  AND s.customer_id IN (\r\n",
+        "    SELECT customer_id\r\n",
+        "    FROM bharatmart.ml.gld_review_insights\r\n",
+        "    WHERE sentiment = 'negative'\r\n",
+        "  )\r\n",
+        ")\r\n",
+        "ORDER BY sort_order"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "51ed41e4",
+      "displayName": "ds_findings_text",
+      "queryLines": [
+        "SELECT 1 AS page_num, 'page1' AS page_id,\r\n",
+        "  CONCAT(\r\n",
+        "    CAST((\r\n",
+        "      SELECT COUNT(DISTINCT customer_id)\r\n",
+        "      FROM bharatmart.ml.gld_review_insights\r\n",
+        "      WHERE retention_priority = 'Urgent' AND sentiment = 'negative'\r\n",
+        "    ) AS STRING),\r\n",
+        "    ' of your most valuable customers are about to leave AND telling you why. Each Urgent customer has spent an average of ₹',\r\n",
+        "    format_number((\r\n",
+        "      SELECT ROUND(AVG(total_spent), 0)\r\n",
+        "      FROM bharatmart.ml.gld_rfm_segments\r\n",
+        "      WHERE retention_priority = 'Urgent'\r\n",
+        "    ), 0),\r\n",
+        "    ' lifetime — ',\r\n",
+        "    CAST(ROUND((\r\n",
+        "      SELECT AVG(total_spent) FROM bharatmart.ml.gld_rfm_segments WHERE retention_priority = 'Urgent'\r\n",
+        "    ) / (\r\n",
+        "      SELECT AVG(total_spent) FROM bharatmart.ml.gld_rfm_segments WHERE rfm_segment = 'At Risk'\r\n",
+        "    ), 0) AS BIGINT),\r\n",
+        "    'x what an average At Risk customer spends. Page 5 has their names.'\r\n",
+        "  ) AS findings_text\r\n",
+        "\r\n",
+        "UNION ALL\r\n",
+        "\r\n",
+        "SELECT 2, 'page2',\r\n",
+        "  CONCAT(\r\n",
+        "    CAST(ROUND(\r\n",
+        "      SUM(CASE WHEN churn_risk_band = 'High' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1\r\n",
+        "    ) AS STRING),\r\n",
+        "    '% of the customer base is in the High risk band. But the ',\r\n",
+        "    CAST(SUM(CASE WHEN churn_risk_band = 'Critical' THEN 1 ELSE 0 END) AS STRING),\r\n",
+        "    ' Critical customers hold the highest lifetime value. Top churn driver: declining spend. Review ratings rank last — dissatisfaction in text does not predict departure.'\r\n",
+        "  )\r\n",
+        "FROM bharatmart.ml.gld_churn_predictions\r\n",
+        "\r\n",
+        "UNION ALL\r\n",
+        "\r\n",
+        "SELECT 3, 'page3',\r\n",
+        "  CONCAT(\r\n",
+        "    CAST((\r\n",
+        "      SELECT COUNT(*) FROM bharatmart.ml.gld_rfm_segments WHERE retention_priority = 'Urgent'\r\n",
+        "    ) AS STRING),\r\n",
+        "    ' Urgent customers are Champions — average lifetime spend ₹',\r\n",
+        "    format_number((\r\n",
+        "      SELECT ROUND(AVG(total_spent), 0)\r\n",
+        "      FROM bharatmart.ml.gld_rfm_segments WHERE retention_priority = 'Urgent'\r\n",
+        "    ), 0),\r\n",
+        "    '. One lost Urgent customer = approximately ',\r\n",
+        "    CAST(ROUND((\r\n",
+        "      SELECT AVG(total_spent) FROM bharatmart.ml.gld_rfm_segments WHERE retention_priority = 'Urgent'\r\n",
+        "    ) / (\r\n",
+        "      SELECT AVG(total_spent) FROM bharatmart.ml.gld_rfm_segments WHERE rfm_segment = 'At Risk'\r\n",
+        "    ), 0) AS BIGINT),\r\n",
+        "    'x the value of one At Risk customer. RFMQ re-ranking improved recommendation quality by 25.5%.'\r\n",
+        "  )\r\n",
+        "\r\n",
+        "UNION ALL\r\n",
+        "\r\n",
+        "SELECT 4, 'page4',\r\n",
+        "  CONCAT(\r\n",
+        "    'Negative sentiment is equally distributed across all churn bands at approximately 18%. Reviews alone do not predict churn. ',\r\n",
+        "    CAST((\r\n",
+        "      SELECT COUNT(*) FROM bharatmart.ml.gld_review_insights\r\n",
+        "      WHERE rating >= 4 AND sentiment = 'negative'\r\n",
+        "    ) AS STRING),\r\n",
+        "    ' customers rated 4-5 stars but wrote negative text — hidden dissatisfied. The actionable signal: churn risk PLUS negative sentiment = ',\r\n",
+        "    CAST((\r\n",
+        "      SELECT COUNT(DISTINCT customer_id) FROM bharatmart.ml.gld_review_insights\r\n",
+        "      WHERE retention_priority = 'Urgent' AND sentiment = 'negative'\r\n",
+        "    ) AS STRING),\r\n",
+        "    ' customers. That is the list on Page 5.'\r\n",
+        "  )\r\n",
+        "\r\n",
+        "UNION ALL\r\n",
+        "\r\n",
+        "SELECT 5, 'page5',\r\n",
+        "  CONCAT(\r\n",
+        "    CAST(COUNT(DISTINCT s.customer_id) AS STRING),\r\n",
+        "    ' customers match current filters. Average lifetime spend: ₹',\r\n",
+        "    format_number(ROUND(AVG(s.total_spent), 0), 0),\r\n",
+        "    '. Average churn probability: ',\r\n",
+        "    CAST(ROUND(AVG(s.churn_probability) * 100, 1) AS STRING),\r\n",
+        "    '%. Start here.'\r\n",
+        "  )\r\n",
+        "FROM bharatmart.ml.gld_rfm_segments s\r\n",
+        "WHERE s.retention_priority = 'Urgent'\r\n",
+        "AND s.customer_id IN (\r\n",
+        "  SELECT customer_id FROM bharatmart.ml.gld_review_insights\r\n",
+        "  WHERE sentiment = 'negative'\r\n",
+        ")"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "b6be338b",
+      "displayName": "ds_issues_exploded",
+      "queryLines": [
+        "SELECT\r\n",
+        "  issue,\r\n",
+        "  COUNT(*) AS mention_count,\r\n",
+        "  ROUND(COUNT(*) * 100.0 / (\r\n",
+        "    SELECT COUNT(*) FROM bharatmart.ml.gld_review_insights\r\n",
+        "    WHERE sentiment = 'negative'\r\n",
+        "  ), 1) AS pct_of_negative\r\n",
+        "FROM (\r\n",
+        "  SELECT EXPLODE(FROM_JSON(issues, 'ARRAY<STRING>')) AS issue\r\n",
+        "  FROM bharatmart.ml.gld_review_insights\r\n",
+        "  WHERE sentiment = 'negative'\r\n",
+        "  AND issues IS NOT NULL\r\n",
+        "  AND issues != '[]'\r\n",
+        "  AND issues != ''\r\n",
+        ")\r\n",
+        "GROUP BY issue\r\n",
+        "ORDER BY mention_count DESC\r\n",
+        "LIMIT 8"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "a2d9a210",
+      "displayName": "ds_action_table",
+      "queryLines": [
+        "SELECT\r\n",
+        "  s.customer_id,\r\n",
+        "  s.rfm_segment,\r\n",
+        "  s.retention_priority,\r\n",
+        "  ROUND(s.churn_probability, 3) AS churn_probability,\r\n",
+        "  c.top_churn_reason,\r\n",
+        "  ROUND(s.total_spent, 0) AS total_spent,\r\n",
+        "  ROUND(s.recency_days, 0) AS recency_days,\r\n",
+        "  rv.sentiment AS latest_sentiment,\r\n",
+        "  rv.issues AS complaint_issues,\r\n",
+        "  rec.top_3_products\r\n",
+        "FROM bharatmart.ml.gld_rfm_segments s\r\n",
+        "JOIN bharatmart.ml.gld_churn_predictions c\r\n",
+        "  ON s.customer_id = c.customer_id\r\n",
+        "LEFT JOIN (\r\n",
+        "  SELECT customer_id, sentiment, issues\r\n",
+        "  FROM (\r\n",
+        "    SELECT customer_id, sentiment, issues,\r\n",
+        "      ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY review_date DESC) AS rn\r\n",
+        "    FROM bharatmart.ml.gld_review_insights\r\n",
+        "  ) WHERE rn = 1\r\n",
+        ") rv ON s.customer_id = rv.customer_id\r\n",
+        "LEFT JOIN (\r\n",
+        "  SELECT customer_id,\r\n",
+        "    CONCAT_WS(' | ', COLLECT_LIST(CAST(product_id AS STRING))) AS top_3_products\r\n",
+        "  FROM (\r\n",
+        "    SELECT customer_id, product_id,\r\n",
+        "      ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY rfmq_score DESC) AS rn\r\n",
+        "    FROM bharatmart.ml.gld_rfmq_recommendations\r\n",
+        "  ) WHERE rn <= 3\r\n",
+        "  GROUP BY customer_id\r\n",
+        ") rec ON s.customer_id = rec.customer_id\r\n",
+        "WHERE s.retention_priority = 'Urgent'\r\n",
+        "AND rv.sentiment = 'negative'\r\n",
+        "ORDER BY s.churn_probability DESC, s.total_spent DESC"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "201c2e1d",
+      "displayName": "At-Risk Customers percentage",
+      "queryLines": [
+        "SELECT \r\n",
+        "  ROUND(\r\n",
+        "    SUM(CASE WHEN churn_risk_band IN ('Critical','High') THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1\r\n",
+        "  ) AS at_risk_pct\r\n",
+        "FROM bharatmart.ml.gld_churn_predictions"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "d26dd9ca",
+      "displayName": "Urgent Priority",
+      "queryLines": [
+        "SELECT COUNT(*) AS urgent_count\r\n",
+        "FROM bharatmart.ml.gld_rfm_segments\r\n",
+        "WHERE retention_priority = 'Urgent'"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "28d8ae12",
+      "displayName": "Critical Risk Customers",
+      "queryLines": [
+        "SELECT COUNT(*) AS critical_count\r\n",
+        "FROM bharatmart.ml.gld_churn_predictions\r\n",
+        "WHERE churn_risk_band = 'Critical'"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "2d86b4c3",
+      "displayName": "High Risk Customers",
+      "queryLines": [
+        "SELECT COUNT(*) AS high_count\r\n",
+        "FROM bharatmart.ml.gld_churn_predictions\r\n",
+        "WHERE churn_risk_band = 'High'"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "2c8481bc",
+      "displayName": "Avg Churn Probability",
+      "queryLines": [
+        "SELECT ROUND(AVG(churn_probability) * 100, 1) AS avg_churn_prob\r\n",
+        "FROM bharatmart.ml.gld_churn_predictions\r\n",
+        "WHERE churn_risk_band IN ('Critical', 'High')"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "53627201",
+      "displayName": "Medium Risk Count",
+      "queryLines": [
+        "SELECT COUNT(*) AS medium_count\r\n",
+        "FROM bharatmart.ml.gld_churn_predictions\r\n",
+        "WHERE churn_risk_band = 'Medium'"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "dfd344ee",
+      "displayName": "Champion Count",
+      "queryLines": [
+        "SELECT COUNT(*) AS champion_count\r\n",
+        "FROM bharatmart.ml.gld_rfm_segments\r\n",
+        "WHERE rfm_segment = 'Champions'"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "2c1a6abd",
+      "displayName": "Loyal Customers",
+      "queryLines": [
+        "SELECT COUNT(*) AS loyal_count\r\n",
+        "FROM bharatmart.ml.gld_rfm_segments\r\n",
+        "WHERE rfm_segment = 'Loyal Customers'"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "c1039fb9",
+      "displayName": "At Risk Avg Spend",
+      "queryLines": [
+        "SELECT ROUND(AVG(total_spent), 0) AS at_risk_avg_spend\r\n",
+        "FROM bharatmart.ml.gld_rfm_segments\r\n",
+        "WHERE rfm_segment = 'At Risk'"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "bfb115e1",
+      "displayName": "At Risk Customers",
+      "queryLines": [
+        "SELECT COUNT(*) AS at_risk_count\r\n",
+        "FROM bharatmart.ml.gld_rfm_segments\r\n",
+        "WHERE rfm_segment = 'At Risk'"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "7a978575",
+      "displayName": "Total Reviews Scored",
+      "queryLines": [
+        "SELECT COUNT(*) AS total_reviews\r\n",
+        "FROM bharatmart.ml.gld_review_insights"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "2c791e94",
+      "displayName": "Hidden Dissatisfied",
+      "queryLines": [
+        "SELECT COUNT(*) AS hidden_dissatisfied\r\n",
+        "FROM bharatmart.ml.gld_review_insights\r\n",
+        "WHERE rating >= 4 AND sentiment = 'negative'"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "597222a4",
+      "displayName": "Urgent + Negative",
+      "queryLines": [
+        "SELECT COUNT(DISTINCT customer_id) AS urgent_negative\r\n",
+        "FROM bharatmart.ml.gld_review_insights\r\n",
+        "WHERE retention_priority = 'Urgent'\r\n",
+        "AND sentiment = 'negative'"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "77410e28",
+      "displayName": "Negative Review Rate",
+      "queryLines": [
+        "SELECT ROUND(\r\n",
+        "  SUM(CASE WHEN sentiment = 'negative' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1\r\n",
+        ") AS negative_rate\r\n",
+        "FROM bharatmart.ml.gld_review_insights"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "8d8c2e31",
+      "displayName": "Customers Requiring Immediate Action",
+      "queryLines": [
+        "SELECT COUNT(*) AS action_list_count\r\n",
+        "FROM bharatmart.ml.gld_rfm_segments\r\n",
+        "WHERE retention_priority = 'Urgent'\r\n",
+        "AND customer_id IN (\r\n",
+        "  SELECT customer_id FROM bharatmart.ml.gld_review_insights\r\n",
+        "  WHERE sentiment = 'negative'\r\n",
+        ")"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "79017d2e",
+      "displayName": "Avg Churn Probability",
+      "queryLines": [
+        "SELECT ROUND(AVG(s.churn_probability) * 100, 1) AS avg_churn_prob\r\n",
+        "FROM bharatmart.ml.gld_rfm_segments s\r\n",
+        "WHERE s.retention_priority = 'Urgent'\r\n",
+        "AND s.customer_id IN (\r\n",
+        "  SELECT customer_id FROM bharatmart.ml.gld_review_insights\r\n",
+        "  WHERE sentiment = 'negative'\r\n",
+        ")"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "83d464f3",
+      "displayName": "Avg Lifetime Spend",
+      "queryLines": [
+        "SELECT ROUND(AVG(s.total_spent), 0) AS avg_spend\r\n",
+        "FROM bharatmart.ml.gld_rfm_segments s\r\n",
+        "WHERE s.retention_priority = 'Urgent'\r\n",
+        "AND s.customer_id IN (\r\n",
+        "  SELECT customer_id FROM bharatmart.ml.gld_review_insights\r\n",
+        "  WHERE sentiment = 'negative'\r\n",
+        ")"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    },
+    {
+      "name": "e87aaa20",
+      "displayName": "Total Revenue at Risk",
+      "queryLines": [
+        "SELECT ROUND(SUM(s.total_spent), 0) AS revenue_at_risk\r\n",
+        "FROM bharatmart.ml.gld_rfm_segments s\r\n",
+        "WHERE s.retention_priority = 'Urgent'\r\n",
+        "AND s.customer_id IN (\r\n",
+        "  SELECT customer_id FROM bharatmart.ml.gld_review_insights\r\n",
+        "  WHERE sentiment = 'negative'\r\n",
+        ")"
+      ],
+      "catalog": "bharatmart",
+      "schema": "ml"
+    }
+  ],
+  "pages": [
+    {
+      "name": "4ef1af26",
+      "displayName": "Retention Overview",
+      "layout": [
+        {
+          "widget": {
+            "name": "total-distinct-customers",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "d512fdef",
+                  "fields": [
+                    {
+                      "name": "countdistinct(customer_id)",
+                      "expression": "COUNT(DISTINCT `customer_id`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total Customers",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "countdistinct(customer_id)",
+                  "style": {
+                    "rules": [
+                      {
+                        "condition": {
+                          "operator": ">="
+                        },
+                        "color": "#00A972"
+                      }
+                    ]
+                  },
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "all"
+                    },
+                    "significantFigures": {
+                      "type": "all"
+                    },
+                    "hideGroupSeparator": false
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "percentage-critical-high-churn-risk",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "201c2e1d",
+                  "fields": [
+                    {
+                      "name": "at_risk_pct",
+                      "expression": "`at_risk_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "At Risk Percentage",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "at_risk_pct"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "average-total-spent-champions",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "56525f01",
+                  "fields": [
+                    {
+                      "name": "avg(total_spent)",
+                      "expression": "AVG(`total_spent`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Champion Avg Spend (₹)",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(total_spent)",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "count-urgent-retention-priority-customers",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "d26dd9ca",
+                  "fields": [
+                    {
+                      "name": "sum(urgent_count)",
+                      "expression": "SUM(`urgent_count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total Urgent Count",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(urgent_count)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "customer-count-by-stage",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "893879e6",
+                  "fields": [
+                    {
+                      "name": "stage",
+                      "expression": "`stage`"
+                    },
+                    {
+                      "name": "sum(customer_count)",
+                      "expression": "SUM(`customer_count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Retention Funnel\n",
+                "showTitle": true
+              },
+              "mark": {
+                "colors": [
+                  "#1B3A6B",
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 2
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 3
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 4
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 5
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 6
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 7
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 8
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 9
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 10
+                  }
+                ]
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "sum(customer_count)",
+                  "axis": {
+                    "hideLabels": true
+                  },
+                  "scale": {
+                    "type": "quantitative",
+                    "fn": {
+                      "type": "symlog"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "stage",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  }
+                },
+                "color": {
+                  "fieldName": "stage",
+                  "legend": {
+                    "hide": true
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "Total Customers",
+                        "color": "#1B3A6B"
+                      },
+                      {
+                        "value": "Critical Risk",
+                        "color": "#E65C00"
+                      },
+                      {
+                        "value": "Urgent Champions",
+                        "color": "#CC0000"
+                      },
+                      {
+                        "value": "Urgent + Negative Review",
+                        "color": "#8B0000"
+                      }
+                    ]
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 12,
+            "height": 7
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "6542cb1e",
+      "displayName": "Churn Risk Analysis",
+      "layout": [
+        {
+          "widget": {
+            "name": "total-critical-count",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "28d8ae12",
+                  "fields": [
+                    {
+                      "name": "sum(critical_count)",
+                      "expression": "SUM(`critical_count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Critical Risk Customers",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(critical_count)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "high-risk-customers",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "2d86b4c3",
+                  "fields": [
+                    {
+                      "name": "sum(high_count)",
+                      "expression": "SUM(`high_count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "High Risk Customers",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(high_count)",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 2
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "average-churn-probability",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "2c8481bc",
+                  "fields": [
+                    {
+                      "name": "avg(avg_churn_prob)",
+                      "expression": "AVG(`avg_churn_prob`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Average Churn Probability",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(avg_churn_prob)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "medium-risk-count",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "53627201",
+                  "fields": [
+                    {
+                      "name": "sum(medium_count)",
+                      "expression": "SUM(`medium_count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Medium Risk Customers",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(medium_count)",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 2
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "customer-count-by-churn-risk-band",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "d512fdef",
+                  "fields": [
+                    {
+                      "name": "churn_risk_band",
+                      "expression": "`churn_risk_band`"
+                    },
+                    {
+                      "name": "count(customer_id)",
+                      "expression": "COUNT(`customer_id`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Churn Risk Distribution",
+                "showTitle": true
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "churn_risk_band",
+                  "axis": {
+                    "hideLabels": false
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "count(customer_id)",
+                  "axis": {
+                    "hideLabels": true
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "churn_risk_band",
+                  "legend": {
+                    "hide": true
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "High",
+                        "color": {
+                          "themeColorType": "visualizationColors",
+                          "position": 4
+                        }
+                      },
+                      {
+                        "value": "Medium",
+                        "color": {
+                          "themeColorType": "visualizationColors",
+                          "position": 2
+                        }
+                      },
+                      {
+                        "value": "Critical",
+                        "color": "#B30000"
+                      }
+                    ]
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "count-customers-top-churn-reason",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "d512fdef",
+                  "fields": [
+                    {
+                      "name": "top_churn_reason",
+                      "expression": "`top_churn_reason`"
+                    },
+                    {
+                      "name": "count(customer_id)",
+                      "expression": "COUNT(`customer_id`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Top Churn Reason",
+                "showTitle": true
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "count(customer_id)",
+                  "axis": {
+                    "hideLabels": true
+                  },
+                  "scale": {
+                    "type": "quantitative",
+                    "fn": {
+                      "type": "symlog"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "top_churn_reason",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  }
+                },
+                "color": {
+                  "fieldName": "top_churn_reason",
+                  "legend": {
+                    "hide": true
+                  },
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 2,
+            "width": 6,
+            "height": 7
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "298f85e9",
+      "displayName": "Customer Value",
+      "layout": [
+        {
+          "widget": {
+            "name": "total-champion-count",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "dfd344ee",
+                  "fields": [
+                    {
+                      "name": "sum(champion_count)",
+                      "expression": "SUM(`champion_count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total Champion",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(champion_count)",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 2
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "total-loyal-customers",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "2c1a6abd",
+                  "fields": [
+                    {
+                      "name": "sum(loyal_count)",
+                      "expression": "SUM(`loyal_count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total Loyal Customers",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(loyal_count)",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 2
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "at-risk-average-spend",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "c1039fb9",
+                  "fields": [
+                    {
+                      "name": "avg(at_risk_avg_spend)",
+                      "expression": "AVG(`at_risk_avg_spend`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "At Risk Avg Spend (₹)",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(at_risk_avg_spend)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "total-at-risk-customers-1",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "bfb115e1",
+                  "fields": [
+                    {
+                      "name": "sum(at_risk_count)",
+                      "expression": "SUM(`at_risk_count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total At Risk Customers",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(at_risk_count)",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 2
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "average-total-spent-rfm-segment",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "56525f01",
+                  "fields": [
+                    {
+                      "name": "rfm_segment",
+                      "expression": "`rfm_segment`"
+                    },
+                    {
+                      "name": "avg(total_spent)",
+                      "expression": "AVG(`total_spent`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Average Lifetime Spend by Segment",
+                "showTitle": true
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "avg(total_spent)",
+                  "axis": {
+                    "hideLabels": true
+                  },
+                  "scale": {
+                    "type": "quantitative",
+                    "fn": {
+                      "type": "symlog"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "rfm_segment",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  }
+                },
+                "color": {
+                  "fieldName": "rfm_segment",
+                  "legend": {
+                    "hide": true
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "Champions",
+                        "color": {
+                          "themeColorType": "visualizationColors",
+                          "position": 2
+                        }
+                      },
+                      {
+                        "value": "At Risk",
+                        "color": {
+                          "themeColorType": "visualizationColors",
+                          "position": 4
+                        }
+                      }
+                    ]
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "9313994b",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "56525f01",
+                  "fields": [
+                    {
+                      "name": "rfm_segment",
+                      "expression": "`rfm_segment`"
+                    },
+                    {
+                      "name": "churn_probability",
+                      "expression": "`churn_probability`"
+                    },
+                    {
+                      "name": "retention_priority",
+                      "expression": "`retention_priority`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "heatmap",
+              "encodings": {
+                "x": {
+                  "fieldName": "rfm_segment",
+                  "axis": {
+                    "hideTitle": false,
+                    "hideLabels": true
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "custom-order",
+                      "orderedValues": [
+                        "Loyal Customers",
+                        "Champions",
+                        "At Risk"
+                      ]
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "retention_priority",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "color": {
+                  "fieldName": "rfm_segment",
+                  "legend": {
+                    "hide": true
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "At Risk",
+                        "color": {
+                          "themeColorType": "visualizationColors",
+                          "position": 4
+                        }
+                      }
+                    ]
+                  }
+                },
+                "label": {
+                  "show": true,
+                  "text": {
+                    "fieldName": "rfm_segment"
+                  }
+                },
+                "extra": [
+                  {
+                    "fieldName": "churn_probability"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 2,
+            "width": 6,
+            "height": 7
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "6ea175e2",
+      "displayName": "Review Insights",
+      "layout": [
+        {
+          "widget": {
+            "name": "total-reviews",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "7a978575",
+                  "fields": [
+                    {
+                      "name": "sum(total_reviews)",
+                      "expression": "SUM(`total_reviews`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Reviews Analysed",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_reviews)",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 2
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "total-hidden-dissatisfied",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "2c791e94",
+                  "fields": [
+                    {
+                      "name": "sum(hidden_dissatisfied)",
+                      "expression": "SUM(`hidden_dissatisfied`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total Hidden Dissatisfied",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(hidden_dissatisfied)",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 2
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "table-urgent-negative-data",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "597222a4",
+                  "fields": [
+                    {
+                      "name": "urgent_negative",
+                      "expression": "`urgent_negative`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Urgent + Negative Reviews",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "urgent_negative"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "negative-review-rate",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "77410e28",
+                  "fields": [
+                    {
+                      "name": "negative_rate",
+                      "expression": "`negative_rate`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Negative Review Rate",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "negative_rate"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "count-of-reviews-by-sentiment",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "c2c12ccf",
+                  "fields": [
+                    {
+                      "name": "sentiment",
+                      "expression": "`sentiment`"
+                    },
+                    {
+                      "name": "count(review_id)",
+                      "expression": "COUNT(`review_id`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Sentiment Distribution",
+                "showTitle": true
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "sentiment",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "count(review_id)",
+                  "axis": {
+                    "hideLabels": true
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "sentiment",
+                  "legend": {
+                    "hide": true
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "negative",
+                        "color": {
+                          "themeColorType": "visualizationColors",
+                          "position": 4
+                        }
+                      }
+                    ]
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "mention-count-by-issue",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "b6be338b",
+                  "fields": [
+                    {
+                      "name": "issue",
+                      "expression": "`issue`"
+                    },
+                    {
+                      "name": "mention_count",
+                      "expression": "`mention_count`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Top Product Complaints",
+                "showTitle": true
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "mention_count",
+                  "axis": {
+                    "title": "Mention Count",
+                    "hideLabels": true
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "issue",
+                  "axis": {
+                    "title": "Issue"
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  }
+                },
+                "color": {
+                  "fieldName": "issue",
+                  "legend": {
+                    "hide": true
+                  },
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 2,
+            "width": 6,
+            "height": 7
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "9506339e",
+      "displayName": "Action Center",
+      "layout": [
+        {
+          "widget": {
+            "name": "total-actions-required",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "8d8c2e31",
+                  "fields": [
+                    {
+                      "name": "sum(action_list_count)",
+                      "expression": "SUM(`action_list_count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Customers Requiring Immediate Action\n",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(action_list_count)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "table-of-all-columns",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "a2d9a210",
+                  "fields": [
+                    {
+                      "name": "customer_id",
+                      "expression": "`customer_id`"
+                    },
+                    {
+                      "name": "rfm_segment",
+                      "expression": "`rfm_segment`"
+                    },
+                    {
+                      "name": "retention_priority",
+                      "expression": "`retention_priority`"
+                    },
+                    {
+                      "name": "churn_probability",
+                      "expression": "`churn_probability`"
+                    },
+                    {
+                      "name": "top_churn_reason",
+                      "expression": "`top_churn_reason`"
+                    },
+                    {
+                      "name": "total_spent",
+                      "expression": "`total_spent`"
+                    },
+                    {
+                      "name": "recency_days",
+                      "expression": "`recency_days`"
+                    },
+                    {
+                      "name": "latest_sentiment",
+                      "expression": "`latest_sentiment`"
+                    },
+                    {
+                      "name": "complaint_issues",
+                      "expression": "`complaint_issues`"
+                    },
+                    {
+                      "name": "top_3_products",
+                      "expression": "`top_3_products`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "rowsPerPage": 25,
+              "displayRowNumbers": false,
+              "frame": {
+                "title": "Priority Action List - Urgent Champions",
+                "showTitle": true
+              },
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "customer_id"
+                  },
+                  {
+                    "fieldName": "rfm_segment"
+                  },
+                  {
+                    "fieldName": "retention_priority"
+                  },
+                  {
+                    "fieldName": "churn_probability"
+                  },
+                  {
+                    "fieldName": "top_churn_reason"
+                  },
+                  {
+                    "fieldName": "total_spent"
+                  },
+                  {
+                    "fieldName": "recency_days"
+                  },
+                  {
+                    "fieldName": "latest_sentiment"
+                  },
+                  {
+                    "fieldName": "complaint_issues"
+                  },
+                  {
+                    "fieldName": "top_3_products"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 12,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "average-churn-probability",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "79017d2e",
+                  "fields": [
+                    {
+                      "name": "avg(avg_churn_prob)",
+                      "expression": "AVG(`avg_churn_prob`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Average Churn Probability",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(avg_churn_prob)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "average-lifetime-spend",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "83d464f3",
+                  "fields": [
+                    {
+                      "name": "avg(avg_spend)",
+                      "expression": "AVG(`avg_spend`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Avg Lifetime Spend (₹)",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(avg_spend)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "total-revenue-at-risk",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "e87aaa20",
+                  "fields": [
+                    {
+                      "name": "sum(revenue_at_risk)",
+                      "expression": "SUM(`revenue_at_risk`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total Revenue at Risk (₹)",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(revenue_at_risk)",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 2
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "canvasBackgroundColor": {
+        "light": "#FAFAFB",
+        "dark": "#1F272D"
+      },
+      "widgetBackgroundColor": {
+        "light": "#FFFFFF",
+        "dark": "#11171C"
+      },
+      "widgetBorderColor": {
+        "light": "#3A3939"
+      },
+      "fontColor": {
+        "light": "#11171C",
+        "dark": "#E8ECF0"
+      },
+      "selectionColor": {
+        "light": "#2272B4",
+        "dark": "#8ACAFF"
+      },
+      "widgetHeaderAlignment": "CENTER"
+    },
+    "applyModeEnabled": false
+  }
+}
