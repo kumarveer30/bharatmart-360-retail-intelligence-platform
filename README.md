@@ -68,7 +68,7 @@ The call list is not just a list of names. Each row contains:
 
 ## Architecture
 
-Three Azure services feed raw data in. Data moves through three layers: Bronze (raw), Silver (cleaned and validated), Gold (model outputs and aggregations). Five ML models run on Silver and write to Gold. Results reach a live AIBI dashboard by 08:00 IST every morning.
+Three Azure services feed raw data in. Data moves through three layers: Bronze (raw), Silver (cleaned and validated), Gold (aggregations and dimensions & fact table). Five ML models run on Silver and write to ml schema. Results reach a live AIBI dashboard by every morning.
 
 ![BharatMart Pipeline Architecture](Pipeline%20architecture.png)
 
@@ -251,7 +251,7 @@ DAG:         LakeFlow Jobs (Bronze to Silver to Gold, ML models in sequence)
 Registry:    MLflow @Production aliases (auto-loaded on each scoring run)
 Pinning:     xgboost==2.0.3 · scikit-learn==1.3.2
 Schema:      bharatmart.ml (all ML tables and registered models)
-Dashboard:   AIBI publishes at 5AM · ready at 8AM
+Dashboard:   AIBI publishes at 5AM · ready at every morning.
 ```
 
 ---
