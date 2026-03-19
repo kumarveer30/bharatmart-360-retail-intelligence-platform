@@ -196,7 +196,7 @@ India is a Monetary-first market. The entropy formula detected this automaticall
 ### M5: Sentiment Analysis (Mosaic AI / LLaMA 3.3 70B)
 > Roumeliotis et al. (2024), *Elsevier NLP Journal* Vol.6. DOI: [10.1016/j.nlp.2024.100056](https://doi.org/10.1016/j.nlp.2024.100056)
 
-Runs `ai_query()` with `databricks-meta-llama-3-3-70b-instruct` against every review containing text. The prompt returns three structured outputs per review: sentiment label (positive / neutral / negative), a confidence score between 0 and 1, and an array of specific issue categories mentioned in the text such as delivery delay, product mismatch, packaging damage, and quality complaint.
+Runs `ai_query()` with `databricks-meta-llama-4` against every review containing text. The prompt returns three structured outputs per review: sentiment label (positive / neutral / negative), a confidence score between 0 and 1, and an array of specific issue categories mentioned in the text such as delivery delay, product mismatch, packaging damage, and quality complaint.
 
 **369,230 reviews scored. Zero parse failures.**
 
